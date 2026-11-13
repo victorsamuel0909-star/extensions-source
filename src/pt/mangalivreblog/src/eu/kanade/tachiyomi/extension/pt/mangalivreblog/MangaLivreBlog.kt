@@ -121,28 +121,28 @@ abstract class MangaLivreBlog : KeiSource() {
             }
         }
 
-        val updatedChapters = if (fetchChapters) fetchChapterList(document) else chapters
+        val updatedChapters = if (fetchChapters) fetchChapterList(document, getMangaUrl(manga)) else chapters
 
         return SMangaUpdate(updatedManga, updatedChapters)
     }
 
-    private suspend fun fetchChapterList(document: Document): List<SChapter> {
+    private suspend fun fetchChapterList(document: Document, mangaUrl: String): List<SChapter> {
         val container = document.selectFirst(".chapters-container") ?: return emptyList()
-        val pageSize = container.attr("data-page-size").toIntOrNull() ?: 12
-        val total = container.attr("data-total-chapters").toIntOrNull() ?: 0
-        val pages = (total + pageSize - 1) / pageSize
-
         val chapters = parseChapters(container).toMutableList()
-        for (page in 2..pages) {
-            val url = container.attr("data-ajax-url").toHttpUrl().newBuilder()
-                .addQueryParameter("action", "slimeread_manga_chapters")
-                .addQueryParameter("manga_id", container.attr("data-manga-id"))
-                .addQueryParameter("nonce", container.attr("data-nonce"))
-                .addQueryParameter("page", page.toString())
+
+        val loadMoreButton = document.selectFirst("#sr-load-chapters") ?: return chapters
+        var offset = loadMoreButton.attr("data-offset").toIntOrNull() ?: return chapters
+        val total = loadMoreButton.attr("data-total").toIntOrNull() ?: return chapters
+        val mangaId = loadMoreButton.attr("data-manga")
+
+        while (offset < total) {
+            val url = "$baseUrl/wp-json/slimeread/v1/chapters/$mangaId".toHttpUrl().newBuilder()
+                .addQueryParameter("offset", offset.toString())
                 .addQueryParameter("search", "")
                 .build()
-            val markup = client.get(url, Fetch.XHR).parseAs<ChaptersResponse>().data.markup
-            chapters += parseChapters(Jsoup.parseBodyFragment(markup, baseUrl))
+            val response = client.get(url, Fetch.XHR.from(mangaUrl)).parseAs<ChaptersResponse>()
+            chapters += parseChapters(Jsoup.parseBodyFragment(response.list, baseUrl))
+            offset = response.offset
         }
 
         return chapters

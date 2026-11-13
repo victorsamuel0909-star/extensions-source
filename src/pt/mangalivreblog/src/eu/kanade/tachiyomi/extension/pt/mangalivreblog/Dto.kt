@@ -4,10 +4,6 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 class ChaptersResponse(
-    val data: ChaptersData,
-)
-
-@Serializable
-class ChaptersData(
-    val markup: String,
+    val list: String,
+    val offset: Int,
 )
